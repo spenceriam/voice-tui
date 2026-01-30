@@ -62,12 +62,15 @@ export function Waveform({ isRecording, numBars = 20, onAmplitudeUpdate }: Wavef
     }
   }, [isRecording, generateAmplitudes])
 
-  // Get color based on amplitude
+  // Get color based on amplitude - using hex colors (OpenTUI doesn't support HSL)
   const getBarColor = (amplitude: number, index: number): string => {
-    const hue = 240 + (index / numBars) * 60 // Blue to purple range
-    const saturation = 70
-    const lightness = 30 + amplitude * 40 // Darker when low, brighter when high
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`
+    // Blue (#4682b4) to Purple (#6a5acd) gradient based on amplitude and position
+    const ratio = index / numBars
+    if (amplitude < 0.2) return '#2a4060'  // Dark blue
+    if (amplitude < 0.4) return '#3d5a80'  // Medium blue
+    if (amplitude < 0.6) return '#4682b4'  // Steel blue
+    if (amplitude < 0.8) return '#5a4fcf'  // Medium purple
+    return '#6a5acd'  // Slate blue
   }
 
   // Get character for bar height

@@ -135,11 +135,19 @@ export class AudioRecorder {
     
     // Collect audio data
     this.recordingProcess.stream()
-      .on('data', (chunk: Buffer) => {
-        this.audioChunks.push(chunk)
+      .on('data', (chunk: Buffer | string) => {
+        // Handle both Buffer and string chunks
+        let buffer: Buffer
+        if (typeof chunk === 'string') {
+          buffer = Buffer.from(chunk, 'binary')
+        } else {
+          buffer = chunk
+        }
+        
+        this.audioChunks.push(buffer)
         
         // Calculate amplitude from audio chunk
-        const amplitude = this.calculateAmplitude(chunk)
+        const amplitude = this.calculateAmplitude(buffer)
         if (this.onAmplitudeCallback) {
           this.onAmplitudeCallback(amplitude)
         }
