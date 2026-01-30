@@ -6,7 +6,8 @@
 import { ChildProcess } from 'child_process'
 
 // Import node-record-lpcm16 - will throw if not available
-import record from 'node-record-lpcm16'
+import * as recordModule from 'node-record-lpcm16'
+const record = recordModule.record
 
 export interface RecordingOptions {
   sampleRate?: number
