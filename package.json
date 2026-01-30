@@ -1,0 +1,43 @@
+{
+  "name": "voice-tui",
+  "version": "0.1.0",
+  "description": "Voice capture and dictation proof-of-concept using OpenTUI and Whisper",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "bun run src/index.tsx",
+    "build": "bun build src/index.tsx --outdir dist --target bun",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'No linter configured yet'",
+    "start": "bun run dist/index.js"
+  },
+  "dependencies": {
+    "@opentui/core": "npm:@opentui/core@^0.1.75",
+    "@opentui/react": "npm:@opentui/react@^0.1.75",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.12",
+    "bun-types": "latest",
+    "typescript": "^5.6.3"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "voice",
+    "tui",
+    "terminal",
+    "whisper",
+    "transcription",
+    "opentui",
+    "audio",
+    "dictation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
