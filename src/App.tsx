@@ -4,8 +4,8 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import { createCliRenderer, useKeyboard } from '@opentui/react'
-import { createRoot } from '@opentui/react'
+import { createCliRenderer } from '@opentui/core'
+import { useKeyboard, createRoot } from '@opentui/react'
 import { AudioRecorder } from './audio/recorder.ts'
 import { getAudioDevices, type AudioDevice } from './audio/devices.ts'
 import { transcribe, type TranscriptionResult } from './whisper/transcribe.ts'
@@ -48,7 +48,7 @@ export function App() {
 
   // Timer effect for recording
   useEffect(() => {
-    let interval: Timer | null = null
+    let interval: ReturnType<typeof setInterval> | null = null
     
     if (appState === 'recording') {
       interval = setInterval(() => {
@@ -218,7 +218,7 @@ export function App() {
     <box style={{ padding: 2, flexDirection: 'column', backgroundColor: '#1a1a2e' }}>
       {/* Header */}
       <box style={{ marginBottom: 2, alignItems: 'center' }}>
-        <text style={{ fg: '#6a5acd', bold: true, fontSize: 2 }}>
+        <text style={{ fg: '#6a5acd' }}>
           🎤 Voice-TUI
         </text>
         <text style={{ fg: '#a0a0a0', marginTop: 1 }}>
@@ -276,9 +276,8 @@ export function App() {
               marginRight: 1,
               border: true
             }}
-            onPress={handleCopy}
           >
-            <text style={{ fg: '#ffffff' }}>📋 Copy</text>
+            <text style={{ fg: '#ffffff' }}>📋 Copy (Ctrl+C)</text>
           </box>
           <box
             style={{
@@ -287,9 +286,8 @@ export function App() {
               marginRight: 1,
               border: true
             }}
-            onPress={handleSave}
           >
-            <text style={{ fg: '#ffffff' }}>💾 Save</text>
+            <text style={{ fg: '#ffffff' }}>💾 Save (Ctrl+S)</text>
           </box>
           <box
             style={{
@@ -297,7 +295,6 @@ export function App() {
               padding: 1,
               border: true
             }}
-            onPress={handleNewRecording}
           >
             <text style={{ fg: '#ffffff' }}>🔄 New</text>
           </box>
@@ -318,7 +315,6 @@ export function App() {
                 marginTop: 1,
                 border: true
               }}
-              onPress={handleNewRecording}
             >
               <text style={{ fg: '#ffffff' }}>Try Again</text>
             </box>
@@ -328,7 +324,7 @@ export function App() {
 
       {/* Help Footer */}
       <box style={{ marginTop: 2, border: true, padding: 1 }}>
-        <text style={{ fg: '#666666', italic: true }}>
+        <text style={{ fg: '#666666' }}>
           Space/Enter: Record | Ctrl+C: Copy | Ctrl+S: Save | Ctrl+Q: Quit
         </text>
       </box>

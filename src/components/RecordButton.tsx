@@ -1,8 +1,7 @@
 /**
  * RecordButton component for toggling recording state
+ * Displays recording status and instructions
  */
-
-import { useCallback } from 'react'
 
 interface RecordButtonProps {
   isRecording: boolean
@@ -10,13 +9,7 @@ interface RecordButtonProps {
   disabled?: boolean
 }
 
-export function RecordButton({ isRecording, onToggle, disabled }: RecordButtonProps) {
-  const handlePress = useCallback(() => {
-    if (!disabled) {
-      onToggle()
-    }
-  }, [onToggle, disabled])
-
+export function RecordButton({ isRecording, disabled }: RecordButtonProps) {
   const buttonStyle = isRecording
     ? {
         backgroundColor: disabled ? '#4a2a2a' : '#ff6b6b',
@@ -30,7 +23,7 @@ export function RecordButton({ isRecording, onToggle, disabled }: RecordButtonPr
       }
 
   const label = isRecording ? '⏹️  STOP RECORDING' : '🔴 START RECORDING'
-  const sublabel = isRecording ? '(or press Space)' : '(or press Space)'
+  const sublabel = '(press Space)'
 
   return (
     <box 
@@ -39,7 +32,6 @@ export function RecordButton({ isRecording, onToggle, disabled }: RecordButtonPr
         marginBottom: 1,
         alignItems: 'center'
       }}
-      onPress={handlePress}
     >
       <box
         style={{
@@ -50,10 +42,10 @@ export function RecordButton({ isRecording, onToggle, disabled }: RecordButtonPr
           justifyContent: 'center'
         }}
       >
-        <text style={{ fg: buttonStyle.fg, bold: true }}>
+        <text style={{ fg: buttonStyle.fg }}>
           {label}
         </text>
-        <text style={{ fg: '#cccccc', marginTop: 1, italic: true }}>
+        <text style={{ fg: '#cccccc', marginTop: 1 }}>
           {sublabel}
         </text>
       </box>

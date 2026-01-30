@@ -5,7 +5,8 @@
 
 import { getModelPath } from './config.ts'
 import { isModelDownloaded, downloadModel } from './model.ts'
-import { WhisperConfig, DEFAULT_CONFIG } from './config.ts'
+import type { WhisperConfig } from './config.ts'
+import { DEFAULT_CONFIG } from './config.ts'
 
 export interface TranscriptionResult {
   text: string

@@ -20,7 +20,7 @@ export function TranscriptionView({ text, confidence, isTranscribing }: Transcri
   if (!text) {
     return (
       <box style={{ border: true, padding: 1, marginTop: 1, minHeight: 5 }}>
-        <text style={{ fg: '#666666', italic: true }}>
+        <text style={{ fg: '#666666' }}>
           [No transcription yet. Click record to start.]
         </text>
       </box>
@@ -29,7 +29,7 @@ export function TranscriptionView({ text, confidence, isTranscribing }: Transcri
 
   return (
     <box style={{ border: true, padding: 1, marginTop: 1, minHeight: 5 }}>
-      <text style={{ fg: '#e0e0e0', wrap: true }}>{text}</text>
+      <text style={{ fg: '#e0e0e0' }}>{text}</text>
       {confidence !== undefined && (
         <text style={{ fg: '#4ecdc4', marginTop: 1 }}>
           Confidence: {(confidence * 100).toFixed(1)}%
