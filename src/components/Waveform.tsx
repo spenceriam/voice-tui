@@ -42,7 +42,7 @@ export function Waveform({ isRecording, numBars = 20, onAmplitudeUpdate }: Wavef
 
   // Animation loop
   useEffect(() => {
-    let interval: Timer | null = null
+    let interval: ReturnType<typeof setInterval> | null = null
     
     if (isRecording) {
       // 30fps animation when recording

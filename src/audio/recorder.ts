@@ -89,7 +89,7 @@ export class AudioRecorder {
   private audioChunks: Buffer[] = []
   private startTime: number = 0
   private isRecording: boolean = false
-  private options: Required<RecordingOptions>
+  private options: RecordingOptions & { sampleRate: number; channels: number; bitDepth: number; duration: number; silenceThreshold: number }
   private onAmplitudeCallback: ((amplitude: number) => void) | null = null
   private tempFilename: string = ''
   
@@ -99,7 +99,7 @@ export class AudioRecorder {
       channels: options.channels || 1,
       bitDepth: options.bitDepth || 16,
       duration: options.duration || 60,
-      device: options.device || null,
+      device: options.device,
       silenceThreshold: options.silenceThreshold || 0.5
     }
   }
