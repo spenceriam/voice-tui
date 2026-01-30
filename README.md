@@ -13,6 +13,43 @@ A proof-of-concept terminal user interface (TUI) application that demonstrates v
 - 🖱️ **Mouse & Keyboard**: Click to record or press Space, Tab to navigate
 - 💾 **Export Options**: Copy to clipboard or save to file
 
+## System Requirements
+
+### Required Software
+
+- [Bun](https://bun.sh) runtime (Node.js alternative)
+- **CMake** (required to build whisper.cpp native binary)
+- **build-essential** (gcc/g++ compilers)
+- Microphone access permissions
+- ~250MB free space for Whisper model (downloaded on first run)
+- Internet connection (for first-time model download)
+
+### Linux Prerequisites
+
+Before running the app, install these system dependencies:
+
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install -y cmake build-essential
+
+# Fedora
+sudo dnf install cmake gcc-c++ make
+
+# Arch Linux
+sudo pacman -S cmake base-devel
+```
+
+### macOS Prerequisites
+
+```bash
+# Install cmake via Homebrew
+brew install cmake
+
+# Ensure Xcode Command Line Tools are installed
+xcode-select --install
+```
+
 ## Quick Start
 
 ```bash
@@ -75,13 +112,6 @@ Just use the app normally. When you finish your first recording, the app will:
 
 **Default:** The app uses `small` if no model is pre-downloaded.
 
-## Requirements
-
-- [Bun](https://bun.sh) runtime (Node.js alternative)
-- Microphone access permissions
-- ~250MB free space for Whisper model (downloaded on first run)
-- Internet connection (for first-time model download)
-
 ## Usage
 
 1. **Start the app** - Auto-detects your default microphone
@@ -106,33 +136,50 @@ Just use the app normally. When you finish your first recording, the app will:
 ## Model Storage
 
 Downloaded models are stored at:
-- **Location:** `node_modules/nodejs-whisper/whisperModels/`
+- **Location:** `node_modules/nodejs-whisper/cpp/whisper.cpp/models/`
 - **Files:** `ggml-tiny.bin`, `ggml-small.bin`, etc.
 - **Persistence:** Models persist across app restarts
 - **Re-download:** Delete the `.bin` file to re-download
 
 ## Troubleshooting
 
-**"Downloading model..." seems stuck:**
+### "cmake: not found" Error
+
+**Problem:** You see `cmake: not found` when trying to download a model
+
+**Solution:** Install CMake and build tools:
+```bash
+# Ubuntu/Debian
+sudo apt install -y cmake build-essential
+
+# Then retry:
+bun run download:model small
+```
+
+### "Downloading model..." seems stuck
+
 - This is normal for first use - the model is large (~244MB for small)
 - Wait 1-5 minutes depending on internet speed
 - Check your connection to huggingface.co
 
-**"No audio devices found":**
+### "No audio devices found"
+
 - Ensure microphone is connected
 - Grant microphone permissions in system settings
-- On Linux: ensure user is in `audio` group
+- On Linux: ensure user is in `audio` group: `sudo usermod -aG audio $USER`
 
-**Transcription is slow:**
+### Transcription is slow
+
 - Try a smaller model: `bun run download:model tiny`
 - Large models (medium/large) require more processing time
 
 ## Technical Details
 
-- **Framework**: OpenTUI with React reconciler
-- **Audio**: 16kHz, 16-bit mono WAV (Whisper optimal format)
-- **Model**: OpenAI Whisper (local processing, no cloud)
-- **UI**: Custom FrameBufferRenderable for waveform visualization
+- **Framework:** OpenTUI with React reconciler
+- **Audio:** 16kHz, 16-bit mono WAV (Whisper optimal format)
+- **Model:** OpenAI Whisper (local processing, no cloud)
+- **UI:** Custom FrameBufferRenderable for waveform visualization
+- **Build:** Requires CMake to compile whisper.cpp native binary
 
 ## Architecture
 
