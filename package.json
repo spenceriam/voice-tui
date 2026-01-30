@@ -1,7 +1,7 @@
 {
   "name": "voice-tui",
   "version": "0.1.0",
-  "description": "Voice capture and dictation proof-of-concept using OpenTUI and Whisper",
+  "description": "Voice capture and dictation using OpenTUI and Whisper",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -14,6 +14,8 @@
   "dependencies": {
     "@opentui/core": "npm:@opentui/core@^0.1.75",
     "@opentui/react": "npm:@opentui/react@^0.1.75",
+    "node-record-lpcm16": "^1.0.1",
+    "nodejs-whisper": "^0.2.0",
     "react": "^18.3.1"
   },
   "devDependencies": {

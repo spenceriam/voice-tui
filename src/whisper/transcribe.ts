@@ -1,12 +1,22 @@
 /**
- * Whisper transcription engine
- * Runs inference using whisper.cpp or similar
+ * Whisper transcription engine using nodejs-whisper
+ * Real transcription with support for multiple model sizes
  */
 
-import { getModelPath } from './config.ts'
 import { isModelDownloaded, downloadModel } from './model.ts'
 import type { WhisperConfig } from './config.ts'
-import { DEFAULT_CONFIG } from './config.ts'
+import { DEFAULT_CONFIG, WHISPER_MODELS } from './config.ts'
+import { saveWav } from '../audio/recorder.ts'
+
+// Dynamic import for nodejs-whisper
+let nodewhisper: any = null
+
+try {
+  const whisperModule = await import('nodejs-whisper')
+  nodewhisper = whisperModule.nodewhisper || whisperModule.default?.nodewhisper
+} catch (error) {
+  console.warn('Warning: nodejs-whisper not available, using mock transcription')
+}
 
 export interface TranscriptionResult {
   text: string
@@ -24,9 +34,15 @@ export interface TranscriptionProgress {
 export type TranscriptionProgressCallback = (progress: TranscriptionProgress) => void
 
 /**
+ * Check if real transcription is available
+ */
+export function isRealTranscriptionAvailable(): boolean {
+  return nodewhisper !== null
+}
+
+/**
  * Transcribe audio using Whisper
- * This is a mock implementation for the POC
- * In production, this would use whisper.cpp bindings or ONNX runtime
+ * Supports all model sizes: tiny, base, small, medium, large
  */
 export async function transcribe(
   audioBuffer: Buffer,
@@ -35,6 +51,7 @@ export async function transcribe(
 ): Promise<TranscriptionResult> {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config }
   const modelName = mergedConfig.model
+  const duration = audioBuffer.length / (16000 * 2)
   
   // Check if model is downloaded
   if (!await isModelDownloaded(modelName)) {
@@ -57,7 +74,6 @@ export async function transcribe(
     })
   }
   
-  // Start transcription
   if (onProgress) {
     onProgress({
       status: 'processing',
@@ -66,14 +82,15 @@ export async function transcribe(
     })
   }
   
-  // Mock transcription for POC
-  // In production, this would:
-  // 1. Load the Whisper model
-  // 2. Preprocess audio (resample, normalize)
-  // 3. Run inference
-  // 4. Decode tokens to text
+  let result: TranscriptionResult
   
-  const result = await mockTranscribe(audioBuffer, mergedConfig, onProgress)
+  if (isRealTranscriptionAvailable()) {
+    // Use real nodejs-whisper
+    result = await realTranscribe(audioBuffer, mergedConfig, onProgress)
+  } else {
+    // Fallback to mock
+    result = await mockTranscribe(audioBuffer, mergedConfig, onProgress)
+  }
   
   if (onProgress) {
     onProgress({
@@ -87,17 +104,102 @@ export async function transcribe(
 }
 
 /**
- * Mock transcription for development
- * Simulates processing time and returns sample text
+ * Real transcription using nodejs-whisper
+ */
+async function realTranscribe(
+  audioBuffer: Buffer,
+  config: WhisperConfig,
+  onProgress?: TranscriptionProgressCallback
+): Promise<TranscriptionResult> {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const tempWavPath = `/tmp/voice-tui-${timestamp}.wav`
+  
+  try {
+    // Save audio buffer to temporary WAV file
+    await saveWav(audioBuffer, config.sampleRate, tempWavPath)
+    
+    if (onProgress) {
+      onProgress({
+        status: 'processing',
+        percent: 25,
+        message: 'Processing audio...'
+      })
+    }
+    
+    // Run transcription with nodejs-whisper
+    const transcriptText = await nodewhisper(tempWavPath, {
+      modelName: config.model,
+      autoDownloadModelName: config.model,
+      removeWavFileAfterTranscription: true,
+      whisperOptions: {
+        outputInText: true,
+        language: config.language,
+        translateToEnglish: config.task === 'translate',
+      },
+    })
+    
+    if (onProgress) {
+      onProgress({
+        status: 'processing',
+        percent: 75,
+        message: 'Finalizing...'
+      })
+    }
+    
+    const duration = audioBuffer.length / (config.sampleRate * 2)
+    
+    return {
+      text: transcriptText.trim(),
+      language: config.language || 'en',
+      duration,
+      confidence: calculateConfidence(transcriptText)
+    }
+    
+  } catch (error) {
+    console.error('Transcription error:', error)
+    throw new Error(`Transcription failed: ${error}`)
+  }
+}
+
+/**
+ * Calculate confidence based on text quality
+ * Simple heuristic for now
+ */
+function calculateConfidence(text: string): number {
+  if (!text || text.length === 0) return 0
+  
+  // Penalize very short transcriptions
+  if (text.length < 10) return 0.6
+  
+  // Penalize transcriptions with many repeated words
+  const words = text.toLowerCase().split(/\s+/)
+  const uniqueWords = new Set(words)
+  const repetitionRatio = uniqueWords.size / words.length
+  
+  // Base confidence
+  let confidence = 0.85
+  
+  // Adjust based on repetition
+  confidence *= (0.5 + 0.5 * repetitionRatio)
+  
+  // Penalize if text looks like gibberish (contains non-word characters)
+  const gibberishRatio = (text.match(/[^\w\s\.\,\!\?\-]/g) || []).length / text.length
+  confidence *= (1 - gibberishRatio)
+  
+  return Math.max(0.5, Math.min(0.98, confidence))
+}
+
+/**
+ * Mock transcription for when nodejs-whisper is not available
  */
 async function mockTranscribe(
   audioBuffer: Buffer,
   config: WhisperConfig,
   onProgress?: TranscriptionProgressCallback
 ): Promise<TranscriptionResult> {
-  const duration = audioBuffer.length / (16000 * 2) // 16kHz, 16-bit
+  const duration = audioBuffer.length / (16000 * 2)
   
-  // Simulate processing time (roughly 0.5x to 1x real-time)
+  // Simulate processing time
   const processingTime = Math.max(1000, duration * 1000 * 0.5)
   const steps = 10
   const stepTime = processingTime / steps
@@ -115,7 +217,6 @@ async function mockTranscribe(
   }
   
   // Return mock transcription
-  // In production, this comes from actual Whisper inference
   const mockTexts = [
     'The quick brown fox jumps over the lazy dog.',
     'Hello, this is a test of the voice transcription system.',
@@ -130,7 +231,7 @@ async function mockTranscribe(
     text,
     language: config.language || 'en',
     duration,
-    confidence: 0.85 + Math.random() * 0.1 // 85-95% confidence
+    confidence: 0.85 + Math.random() * 0.1
   }
 }
 
@@ -154,11 +255,29 @@ export async function transcribeFile(
  */
 export async function isTranscriptionAvailable(): Promise<boolean> {
   // Check if any model is available
-  const models = ['tiny', 'base', 'small']
+  const models = Object.keys(WHISPER_MODELS)
   for (const model of models) {
     if (await isModelDownloaded(model)) {
       return true
     }
   }
   return false
+}
+
+/**
+ * Get available models with download status
+ */
+export async function getAvailableModels(): Promise<{name: string, size: string, downloaded: boolean}[]> {
+  const models = []
+  
+  for (const [key, info] of Object.entries(WHISPER_MODELS)) {
+    const downloaded = await isModelDownloaded(key)
+    models.push({
+      name: key,
+      size: info.size,
+      downloaded
+    })
+  }
+  
+  return models
 }

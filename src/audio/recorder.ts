@@ -1,24 +1,35 @@
 /**
  * Audio recording module using node-record-lpcm16
- * Records PCM audio and saves to WAV format
+ * Records PCM audio from microphone and saves to WAV format
  */
 
-import { spawn, ChildProcess } from 'child_process'
-import { Readable } from 'stream'
-import { writeFileSync } from 'fs'
+import { ChildProcess } from 'child_process'
+
+// Dynamic import for node-record-lpcm16 since it's a CommonJS module
+let record: any = null
+
+// Try to load the module
+try {
+  const recordModule = await import('node-record-lpcm16')
+  record = recordModule.default || recordModule
+} catch (error) {
+  console.warn('Warning: node-record-lpcm16 not available, using mock recording')
+}
 
 export interface RecordingOptions {
   sampleRate?: number
   channels?: number
   bitDepth?: number
-  duration?: number // in seconds
+  duration?: number
   device?: string
+  silenceThreshold?: number
 }
 
 export interface RecordingResult {
   audioBuffer: Buffer
   duration: number
   sampleRate: number
+  filename?: string
 }
 
 interface WavHeader {
@@ -39,7 +50,6 @@ function createWavHeader(header: WavHeader): Buffer {
   const buffer = Buffer.alloc(44)
   let offset = 0
   
-  // "RIFF" chunk descriptor
   buffer.write('RIFF', offset)
   offset += 4
   buffer.writeUInt32LE(36 + dataLength, offset)
@@ -47,12 +57,11 @@ function createWavHeader(header: WavHeader): Buffer {
   buffer.write('WAVE', offset)
   offset += 4
   
-  // "fmt " sub-chunk
   buffer.write('fmt ', offset)
   offset += 4
-  buffer.writeUInt32LE(16, offset) // Subchunk1Size (16 for PCM)
+  buffer.writeUInt32LE(16, offset)
   offset += 4
-  buffer.writeUInt16LE(1, offset) // AudioFormat (1 for PCM)
+  buffer.writeUInt16LE(1, offset)
   offset += 2
   buffer.writeUInt16LE(numChannels, offset)
   offset += 2
@@ -65,7 +74,6 @@ function createWavHeader(header: WavHeader): Buffer {
   buffer.writeUInt16LE(bitsPerSample, offset)
   offset += 2
   
-  // "data" sub-chunk
   buffer.write('data', offset)
   offset += 4
   buffer.writeUInt32LE(dataLength, offset)
@@ -77,25 +85,34 @@ function createWavHeader(header: WavHeader): Buffer {
  * AudioRecorder class for managing recording sessions
  */
 export class AudioRecorder {
-  private process: ChildProcess | null = null
+  private recordingProcess: any = null
   private audioChunks: Buffer[] = []
   private startTime: number = 0
   private isRecording: boolean = false
   private options: Required<RecordingOptions>
   private onAmplitudeCallback: ((amplitude: number) => void) | null = null
+  private tempFilename: string = ''
   
   constructor(options: RecordingOptions = {}) {
     this.options = {
-      sampleRate: options.sampleRate || 16000, // Whisper optimal
-      channels: options.channels || 1, // Mono
+      sampleRate: options.sampleRate || 16000,
+      channels: options.channels || 1,
       bitDepth: options.bitDepth || 16,
       duration: options.duration || 60,
-      device: options.device || 'default'
+      device: options.device || null,
+      silenceThreshold: options.silenceThreshold || 0.5
     }
   }
   
   /**
-   * Start recording audio
+   * Check if real recording is available
+   */
+  isRealRecordingAvailable(): boolean {
+    return record !== null
+  }
+  
+  /**
+   * Start recording audio from microphone
    */
   async start(): Promise<void> {
     if (this.isRecording) {
@@ -107,17 +124,81 @@ export class AudioRecorder {
     this.isRecording = true
     
     try {
-      // Use arecord on Linux, sox or other on macOS/Windows
-      // For this POC, we'll use a mock implementation
-      // In production: use node-record-lpcm16 or similar
-      
-      // Mock: Generate silence/sine wave for testing
-      this.mockRecording()
-      
+      if (this.isRealRecordingAvailable()) {
+        await this.startRealRecording()
+      } else {
+        this.startMockRecording()
+      }
     } catch (error) {
       this.isRecording = false
       throw new Error(`Failed to start recording: ${error}`)
     }
+  }
+  
+  /**
+   * Start real microphone recording using node-record-lpcm16
+   */
+  private async startRealRecording(): Promise<void> {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    this.tempFilename = `/tmp/voice-tui-recording-${timestamp}.wav`
+    
+    const recordingOptions = {
+      sampleRate: this.options.sampleRate,
+      channels: this.options.channels,
+      audioType: 'wav',
+      ...(this.options.device && { device: this.options.device })
+    }
+    
+    this.recordingProcess = record.record(recordingOptions)
+    
+    // Collect audio data
+    this.recordingProcess.stream()
+      .on('data', (chunk: Buffer) => {
+        this.audioChunks.push(chunk)
+        
+        // Calculate amplitude from audio chunk
+        const amplitude = this.calculateAmplitude(chunk)
+        if (this.onAmplitudeCallback) {
+          this.onAmplitudeCallback(amplitude)
+        }
+        
+        // Check duration limit
+        if (this.elapsedTime >= this.options.duration) {
+          this.stop()
+        }
+      })
+      .on('error', (err: Error) => {
+        console.error('Recording error:', err)
+        this.isRecording = false
+      })
+      .on('end', () => {
+        // Recording ended
+      })
+  }
+  
+  /**
+   * Calculate amplitude from audio buffer
+   */
+  private calculateAmplitude(buffer: Buffer): number {
+    if (buffer.length < 2) return 0
+    
+    let sum = 0
+    let samples = 0
+    
+    // Sample every 100th sample for performance
+    for (let i = 0; i < buffer.length; i += 200) {
+      if (i + 1 < buffer.length) {
+        const sample = buffer.readInt16LE(i)
+        sum += Math.abs(sample)
+        samples++
+      }
+    }
+    
+    if (samples === 0) return 0
+    
+    // Normalize to 0-1 range
+    const average = sum / samples
+    return Math.min(1, average / 32768)
   }
   
   /**
@@ -130,9 +211,9 @@ export class AudioRecorder {
     
     this.isRecording = false
     
-    if (this.process) {
-      this.process.kill()
-      this.process = null
+    // Stop the recording process
+    if (this.recordingProcess && this.isRealRecordingAvailable()) {
+      this.recordingProcess.stop()
     }
     
     const duration = (Date.now() - this.startTime) / 1000
@@ -141,7 +222,8 @@ export class AudioRecorder {
     return {
       audioBuffer,
       duration,
-      sampleRate: this.options.sampleRate
+      sampleRate: this.options.sampleRate,
+      filename: this.tempFilename
     }
   }
   
@@ -161,42 +243,41 @@ export class AudioRecorder {
   }
   
   /**
-   * Set callback for amplitude updates (for waveform visualization)
+   * Set callback for amplitude updates
    */
   onAmplitude(callback: (amplitude: number) => void): void {
     this.onAmplitudeCallback = callback
   }
   
   /**
-   * Get current amplitude for visualization
+   * Get current amplitude
    */
   getCurrentAmplitude(): number {
-    // Return a mock amplitude value
-    // In production: calculate from recent audio buffer
-    if (!this.isRecording) return 0
-    return Math.random() * 0.8 + 0.1
+    if (!this.isRecording || this.audioChunks.length === 0) return 0
+    const lastChunk = this.audioChunks[this.audioChunks.length - 1]
+    return this.calculateAmplitude(lastChunk)
   }
   
   /**
-   * Mock recording for development/testing
-   * Generates synthetic audio data
+   * Mock recording for testing when real audio not available
    */
-  private mockRecording(): void {
+  private startMockRecording(): void {
+    console.log('Using mock recording (no microphone available)')
+    
     const interval = setInterval(() => {
       if (!this.isRecording) {
         clearInterval(interval)
         return
       }
       
-      // Generate 100ms of mock PCM data
-      const samples = this.options.sampleRate / 10 // 100ms worth
+      // Generate synthetic audio data
+      const samples = this.options.sampleRate / 10
       const bytesPerSample = this.options.bitDepth / 8
       const chunk = Buffer.alloc(samples * bytesPerSample)
       
-      // Generate a simple sine wave with some noise
       for (let i = 0; i < samples; i++) {
         const t = i / this.options.sampleRate
-        const frequency = 440 // A4 note
+        const frequency = 440
         const amplitude = 0.3
         const value = Math.sin(2 * Math.PI * frequency * t) * amplitude * 32767
         chunk.writeInt16LE(Math.floor(value), i * bytesPerSample)
@@ -204,12 +285,10 @@ export class AudioRecorder {
       
       this.audioChunks.push(chunk)
       
-      // Call amplitude callback
       if (this.onAmplitudeCallback) {
-        this.onAmplitudeCallback(this.getCurrentAmplitude())
+        this.onAmplitudeCallback(0.3 + Math.random() * 0.2)
       }
       
-      // Auto-stop at duration limit
       if (this.elapsedTime >= this.options.duration) {
         this.stop()
         clearInterval(interval)
@@ -221,7 +300,7 @@ export class AudioRecorder {
 /**
  * Save audio buffer to WAV file
  */
-export function saveWav(buffer: Buffer, sampleRate: number, filename: string): void {
+export async function saveWav(buffer: Buffer, sampleRate: number, filename: string): Promise<void> {
   const header = createWavHeader({
     sampleRate,
     numChannels: 1,
@@ -230,7 +309,7 @@ export function saveWav(buffer: Buffer, sampleRate: number, filename: string): v
   })
   
   const wavBuffer = Buffer.concat([header, buffer])
-  writeFileSync(filename, wavBuffer)
+  await Bun.write(filename, wavBuffer)
 }
 
 /**
@@ -243,11 +322,11 @@ export async function loadWav(filename: string): Promise<RecordingResult> {
   
   // Parse WAV header
   const sampleRate = buffer.readUInt32LE(24)
-  const dataOffset = 44 // Standard WAV header size
+  const dataOffset = 44
   const dataLength = buffer.readUInt32LE(40)
   
   const audioBuffer = buffer.slice(dataOffset, dataOffset + dataLength)
-  const duration = dataLength / (sampleRate * 2) // 16-bit = 2 bytes per sample
+  const duration = dataLength / (sampleRate * 2)
   
   return {
     audioBuffer,

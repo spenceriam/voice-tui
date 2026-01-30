@@ -8,7 +8,7 @@ import { createCliRenderer } from '@opentui/core'
 import { useKeyboard, createRoot } from '@opentui/react'
 import { AudioRecorder } from './audio/recorder.ts'
 import { getAudioDevices, type AudioDevice } from './audio/devices.ts'
-import { transcribe, type TranscriptionResult } from './whisper/transcribe.ts'
+import { transcribe, type TranscriptionResult, getAvailableModels } from './whisper/transcribe.ts'
 import { copyToClipboard } from './utils/clipboard.ts'
 import { saveTranscriptionWithMetadata } from './utils/file.ts'
 import { DeviceSelector } from './components/DeviceSelector.tsx'
@@ -16,8 +16,10 @@ import { Waveform } from './components/Waveform.tsx'
 import { Timer } from './components/Timer.tsx'
 import { RecordButton } from './components/RecordButton.tsx'
 import { TranscriptionView } from './components/TranscriptionView.tsx'
+import { ModelSelector } from './components/ModelSelector.tsx'
 
 type AppState = 'idle' | 'recording' | 'transcribing' | 'result' | 'error'
+type ViewState = 'main' | 'model-select'
 
 interface ErrorState {
   message: string
@@ -27,15 +29,18 @@ interface ErrorState {
 export function App() {
   // State
   const [appState, setAppState] = useState<AppState>('idle')
+  const [viewState, setViewState] = useState<ViewState>('main')
   const [devices, setDevices] = useState<AudioDevice[]>([])
   const [selectedDevice, setSelectedDevice] = useState<string>('default')
+  const [selectedModel, setSelectedModel] = useState<string>('small')
+  const [downloadedModels, setDownloadedModels] = useState<string[]>([])
   const [recorder] = useState(() => new AudioRecorder({ duration: 60 }))
   const [elapsedTime, setElapsedTime] = useState(0)
   const [transcription, setTranscription] = useState<TranscriptionResult | null>(null)
   const [error, setError] = useState<ErrorState | null>(null)
   const [transcriptionProgress, setTranscriptionProgress] = useState(0)
 
-  // Initialize devices on mount
+  // Initialize devices and models on mount
   useEffect(() => {
     getAudioDevices().then(devs => {
       setDevices(devs)
@@ -44,7 +49,17 @@ export function App() {
         setSelectedDevice(defaultDev.id)
       }
     })
+    
+    // Load downloaded models
+    refreshDownloadedModels()
   }, [])
+
+  // Refresh downloaded models list
+  const refreshDownloadedModels = async () => {
+    const models = await getAvailableModels()
+    const downloaded = models.filter(m => m.downloaded).map(m => m.name)
+    setDownloadedModels(downloaded)
+  }
 
   // Timer effect for recording
   useEffect(() => {
@@ -69,26 +84,48 @@ export function App() {
 
   // Keyboard shortcuts
   useKeyboard((key) => {
-    if (key.name === 'space' || key.name === 'return') {
-      if (appState === 'idle' || appState === 'recording') {
-        handleToggleRecording()
-      } else if (appState === 'result') {
-        handleNewRecording()
+    // Handle model selector view
+    if (viewState === 'model-select') {
+      if (key.name === 'escape') {
+        setViewState('main')
+        return
       }
     }
     
-    if (key.ctrl && key.name === 'c' && appState === 'result' && transcription) {
-      handleCopy()
-    }
-    
-    if (key.ctrl && key.name === 's' && appState === 'result' && transcription) {
-      handleSave()
-    }
-    
-    if (key.ctrl && key.name === 'q') {
-      process.exit(0)
+    // Main view shortcuts
+    if (viewState === 'main') {
+      if (key.name === 'space' || key.name === 'return') {
+        if (appState === 'idle' || appState === 'recording') {
+          handleToggleRecording()
+        } else if (appState === 'result') {
+          handleNewRecording()
+        }
+      }
+      
+      if (key.name === 'm' && appState === 'idle') {
+        setViewState('model-select')
+      }
+      
+      if (key.ctrl && key.name === 'c' && appState === 'result' && transcription) {
+        handleCopy()
+      }
+      
+      if (key.ctrl && key.name === 's' && appState === 'result' && transcription) {
+        handleSave()
+      }
+      
+      if (key.ctrl && key.name === 'q') {
+        process.exit(0)
+      }
     }
   })
+
+  // Handle model selection
+  const handleModelChange = useCallback((model: string) => {
+    setSelectedModel(model)
+    setViewState('main')
+    refreshDownloadedModels()
+  }, [])
 
   // Start/stop recording
   const handleToggleRecording = useCallback(async () => {
@@ -116,10 +153,10 @@ export function App() {
       setAppState('transcribing')
       setElapsedTime(0)
 
-      // Transcribe the audio
+      // Transcribe the audio with selected model
       const transcriptionResult = await transcribe(
         result.audioBuffer,
-        { model: 'small' },
+        { model: selectedModel },
         (progress) => {
           setTranscriptionProgress(progress.percent)
         }
@@ -134,7 +171,7 @@ export function App() {
       })
       setAppState('error')
     }
-  }, [recorder])
+  }, [recorder, selectedModel])
 
   // Copy transcription to clipboard
   const handleCopy = useCallback(async () => {
@@ -214,6 +251,35 @@ export function App() {
     }
   }
 
+  // Render model selector view
+  if (viewState === 'model-select') {
+    return (
+      <box style={{ padding: 2, flexDirection: 'column', backgroundColor: '#1a1a2e' }}>
+        <box style={{ marginBottom: 2, alignItems: 'center' }}>
+          <text style={{ fg: '#6a5acd' }}>
+            ⚙️  Model Selection
+          </text>
+          <text style={{ fg: '#a0a0a0', marginTop: 1 }}>
+            Choose Whisper model for transcription
+          </text>
+        </box>
+        
+        <ModelSelector
+          selectedModel={selectedModel}
+          onModelChange={handleModelChange}
+          downloadedModels={downloadedModels}
+        />
+        
+        <box style={{ marginTop: 2, border: true, padding: 1 }}>
+          <text style={{ fg: '#666666' }}>
+            ESC: Back | Enter/Space: Select | Tab/↑↓: Navigate
+          </text>
+        </box>
+      </box>
+    )
+  }
+
+  // Render main view
   return (
     <box style={{ padding: 2, flexDirection: 'column', backgroundColor: '#1a1a2e' }}>
       {/* Header */}
@@ -239,6 +305,29 @@ export function App() {
         selectedDevice={selectedDevice}
         onDeviceChange={handleDeviceChange}
       />
+      
+      {/* Model Info */}
+      {appState === 'idle' && (
+        <box 
+          style={{ 
+            border: true, 
+            padding: 1, 
+            marginBottom: 1,
+            flexDirection: 'row',
+            alignItems: 'center'
+          }}
+        >
+          <text style={{ fg: '#a0a0a0', marginRight: 1 }}>
+            Model:
+          </text>
+          <text style={{ fg: '#6a5acd' }}>
+            {selectedModel.charAt(0).toUpperCase() + selectedModel.slice(1)}
+          </text>
+          <text style={{ fg: '#666666', marginLeft: 1 }}>
+            (Press 'M' to change)
+          </text>
+        </box>
+      )}
 
       {/* Waveform Visualization */}
       <Waveform isRecording={appState === 'recording'} numBars={24} />
@@ -325,7 +414,7 @@ export function App() {
       {/* Help Footer */}
       <box style={{ marginTop: 2, border: true, padding: 1 }}>
         <text style={{ fg: '#666666' }}>
-          Space/Enter: Record | Ctrl+C: Copy | Ctrl+S: Save | Ctrl+Q: Quit
+          Space: Record | M: Model | Ctrl+C: Copy | Ctrl+S: Save | Ctrl+Q: Quit
         </text>
       </box>
     </box>
