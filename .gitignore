@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+*.lock
+
+# Build outputs
+dist/
+build/
+*.log
+
+# OpenTUI and OpenCode (external repos)
+opentui/
+opencode/
+
+# Whisper model files
+models/
+*.gguf
+*.bin
+*.onnx
+
+# Audio temp files
+*.wav
+*.pcm
+*.raw
+temp/
+tmp/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test outputs
+coverage/
+.nyc_output/
+
+# Whisper cache
+~/.voice-tui/
