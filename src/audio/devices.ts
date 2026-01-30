@@ -15,8 +15,8 @@ export interface AudioDevice {
 export async function getAudioDevices(): Promise<AudioDevice[]> {
   const devices: AudioDevice[] = []
   
-  // For now, return a mock default device
-  // In production, this would use platform-specific APIs:
+  // Uses default system microphone
+  // Platform-specific device enumeration could be added:
   // - Linux: pactl, arecord -l, or /proc/asound
   // - macOS: system_profiler SPAudioDataType
   // - Windows: PowerShell or wmic

@@ -5,16 +5,8 @@
 
 import { ChildProcess } from 'child_process'
 
-// Dynamic import for node-record-lpcm16 since it's a CommonJS module
-let record: any = null
-
-// Try to load the module
-try {
-  const recordModule = await import('node-record-lpcm16')
-  record = recordModule.default || recordModule
-} catch (error) {
-  console.warn('Warning: node-record-lpcm16 not available, using mock recording')
-}
+// Import node-record-lpcm16 - will throw if not available
+import record from 'node-record-lpcm16'
 
 export interface RecordingOptions {
   sampleRate?: number
@@ -105,13 +97,6 @@ export class AudioRecorder {
   }
   
   /**
-   * Check if real recording is available
-   */
-  isRealRecordingAvailable(): boolean {
-    return record !== null
-  }
-  
-  /**
    * Start recording audio from microphone
    */
   async start(): Promise<void> {
@@ -124,11 +109,7 @@ export class AudioRecorder {
     this.isRecording = true
     
     try {
-      if (this.isRealRecordingAvailable()) {
-        await this.startRealRecording()
-      } else {
-        this.startMockRecording()
-      }
+      await this.startRealRecording()
     } catch (error) {
       this.isRecording = false
       throw new Error(`Failed to start recording: ${error}`)
@@ -149,7 +130,7 @@ export class AudioRecorder {
       ...(this.options.device && { device: this.options.device })
     }
     
-    this.recordingProcess = record.record(recordingOptions)
+    this.recordingProcess = record(recordingOptions)
     
     // Collect audio data
     this.recordingProcess.stream()
@@ -212,7 +193,7 @@ export class AudioRecorder {
     this.isRecording = false
     
     // Stop the recording process
-    if (this.recordingProcess && this.isRealRecordingAvailable()) {
+    if (this.recordingProcess) {
       this.recordingProcess.stop()
     }
     
@@ -256,44 +237,6 @@ export class AudioRecorder {
     if (!this.isRecording || this.audioChunks.length === 0) return 0
     const lastChunk = this.audioChunks[this.audioChunks.length - 1]
     return this.calculateAmplitude(lastChunk)
-  }
-  
-  /**
-   * Mock recording for testing when real audio not available
-   */
-  private startMockRecording(): void {
-    console.log('Using mock recording (no microphone available)')
-    
-    const interval = setInterval(() => {
-      if (!this.isRecording) {
-        clearInterval(interval)
-        return
-      }
-      
-      // Generate synthetic audio data
-      const samples = this.options.sampleRate / 10
-      const bytesPerSample = this.options.bitDepth / 8
-      const chunk = Buffer.alloc(samples * bytesPerSample)
-      
-      for (let i = 0; i < samples; i++) {
-        const t = i / this.options.sampleRate
-        const frequency = 440
-        const amplitude = 0.3
-        const value = Math.sin(2 * Math.PI * frequency * t) * amplitude * 32767
-        chunk.writeInt16LE(Math.floor(value), i * bytesPerSample)
-      }
-      
-      this.audioChunks.push(chunk)
-      
-      if (this.onAmplitudeCallback) {
-        this.onAmplitudeCallback(0.3 + Math.random() * 0.2)
-      }
-      
-      if (this.elapsedTime >= this.options.duration) {
-        this.stop()
-        clearInterval(interval)
-      }
-    }, 100)
   }
 }
 

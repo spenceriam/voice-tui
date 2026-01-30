@@ -8,15 +8,8 @@ import type { WhisperConfig } from './config.ts'
 import { DEFAULT_CONFIG, WHISPER_MODELS } from './config.ts'
 import { saveWav } from '../audio/recorder.ts'
 
-// Dynamic import for nodejs-whisper
-let nodewhisper: any = null
-
-try {
-  const whisperModule = await import('nodejs-whisper')
-  nodewhisper = whisperModule.nodewhisper || whisperModule.default?.nodewhisper
-} catch (error) {
-  console.warn('Warning: nodejs-whisper not available, using mock transcription')
-}
+// Import nodejs-whisper - will throw if not available
+import { nodewhisper } from 'nodejs-whisper'
 
 export interface TranscriptionResult {
   text: string
@@ -32,13 +25,6 @@ export interface TranscriptionProgress {
 }
 
 export type TranscriptionProgressCallback = (progress: TranscriptionProgress) => void
-
-/**
- * Check if real transcription is available
- */
-export function isRealTranscriptionAvailable(): boolean {
-  return nodewhisper !== null
-}
 
 /**
  * Transcribe audio using Whisper
@@ -82,15 +68,7 @@ export async function transcribe(
     })
   }
   
-  let result: TranscriptionResult
-  
-  if (isRealTranscriptionAvailable()) {
-    // Use real nodejs-whisper
-    result = await realTranscribe(audioBuffer, mergedConfig, onProgress)
-  } else {
-    // Fallback to mock
-    result = await mockTranscribe(audioBuffer, mergedConfig, onProgress)
-  }
+  const result = await runTranscription(audioBuffer, mergedConfig, onProgress)
   
   if (onProgress) {
     onProgress({
@@ -104,9 +82,9 @@ export async function transcribe(
 }
 
 /**
- * Real transcription using nodejs-whisper
+ * Run transcription using nodejs-whisper
  */
-async function realTranscribe(
+async function runTranscription(
   audioBuffer: Buffer,
   config: WhisperConfig,
   onProgress?: TranscriptionProgressCallback
@@ -163,7 +141,7 @@ async function realTranscribe(
 
 /**
  * Calculate confidence based on text quality
- * Simple heuristic for now
+ * Simple heuristic based on text characteristics
  */
 function calculateConfidence(text: string): number {
   if (!text || text.length === 0) return 0
@@ -187,52 +165,6 @@ function calculateConfidence(text: string): number {
   confidence *= (1 - gibberishRatio)
   
   return Math.max(0.5, Math.min(0.98, confidence))
-}
-
-/**
- * Mock transcription for when nodejs-whisper is not available
- */
-async function mockTranscribe(
-  audioBuffer: Buffer,
-  config: WhisperConfig,
-  onProgress?: TranscriptionProgressCallback
-): Promise<TranscriptionResult> {
-  const duration = audioBuffer.length / (16000 * 2)
-  
-  // Simulate processing time
-  const processingTime = Math.max(1000, duration * 1000 * 0.5)
-  const steps = 10
-  const stepTime = processingTime / steps
-  
-  for (let i = 0; i < steps; i++) {
-    await new Promise(resolve => setTimeout(resolve, stepTime))
-    
-    if (onProgress) {
-      onProgress({
-        status: 'processing',
-        percent: (i / steps) * 100,
-        message: `Processing audio... ${Math.round((i / steps) * 100)}%`
-      })
-    }
-  }
-  
-  // Return mock transcription
-  const mockTexts = [
-    'The quick brown fox jumps over the lazy dog.',
-    'Hello, this is a test of the voice transcription system.',
-    'OpenTUI makes it possible to build voice interfaces in the terminal.',
-    'Whisper is an excellent speech recognition model from OpenAI.',
-    'Real-time audio visualization makes the experience more engaging.'
-  ]
-  
-  const text = mockTexts[Math.floor(Math.random() * mockTexts.length)]
-  
-  return {
-    text,
-    language: config.language || 'en',
-    duration,
-    confidence: 0.85 + Math.random() * 0.1
-  }
 }
 
 /**

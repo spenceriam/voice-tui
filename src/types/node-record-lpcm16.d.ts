@@ -21,4 +21,7 @@ declare module 'node-record-lpcm16' {
   }
 
   export function record(options: RecordOptions): Recording
+  
+  // Default export
+  export default record
 }
