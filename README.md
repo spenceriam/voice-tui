@@ -23,8 +23,25 @@ cd voice-tui
 # Install dependencies (requires Bun)
 bun install
 
+# Optional: Download Whisper model beforehand (recommended)
+# This avoids waiting during first transcription
+bun run download:model small
+
 # Run the application
 bun run dev
+```
+
+### Model Download
+
+You can download the Whisper model before running to avoid waiting during first use:
+
+```bash
+# Download specific model (tiny, base, small, medium, large)
+bun run download:model tiny    # Fastest, ~39MB
+bun run download:model small   # Balanced, ~244MB  
+bun run download:model medium  # Better accuracy, ~769MB
+
+# Models are downloaded automatically on first use if not pre-downloaded
 ```
 
 ## Requirements

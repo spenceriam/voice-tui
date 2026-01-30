@@ -9,7 +9,8 @@
     "build": "bun build src/index.tsx --outdir dist --target bun",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'No linter configured yet'",
-    "start": "bun run dist/index.js"
+    "start": "bun run dist/index.js",
+    "download:model": "bun run scripts/download-model.ts"
   },
   "dependencies": {
     "@opentui/core": "npm:@opentui/core@^0.1.75",
